@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 import asyncio
+import os
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -13,7 +14,7 @@ async def play_sound(ctx):
         channel = ctx.author.voice.channel
         voice_client = await channel.connect()
 
-        source = discord.FFmpegPCMAudio("audio path", executable="ffmpeg path")
+        source = discord.FFmpegPCMAudio("audio_files/stoyan2.mp3", executable="C:/ffmpeg/ffmpeg.exe")
         voice_client.play(source, after=lambda e: print("Finished playing sound1"))
 
         while voice_client.is_playing():
@@ -22,4 +23,4 @@ async def play_sound(ctx):
     else:
         await ctx.send("You need to be in a voice channel to use this command.")
 
-bot.run("token")
+bot.run(os.getenv("DISCORD_TOKEN"))

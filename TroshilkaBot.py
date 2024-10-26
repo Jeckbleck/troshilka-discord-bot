@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-=======
 import discord
 from discord.ext import commands
 import asyncio
@@ -25,4 +23,3 @@ async def play_sound(ctx):
         await ctx.send("You need to be in a voice channel to use this command.")
 
 bot.run("token")
->>>>>>> ab83bd6 (simple discord bot that plays a single audio)

@@ -34,4 +34,9 @@ async def play_sound(ctx, sound_name: str):
     else:
         await ctx.send("You need to be in a voice channel to use this command.")
 
+@bot.command(name='list_sounds')
+async def list_sounds(ctx):
+    sound_list = "\n".join([f"- {name}" for name in soundboard.keys()])
+    await ctx.send(f"**Available Sounds:**\n{sound_list}")
+
 bot.run(os.getenv("DISCORD_TOKEN"))

@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 import asyncio
 import os
 from dotenv import load_dotenv
@@ -15,7 +16,7 @@ bot = commands.Bot(command_prefix='/', intents=intents)
 
 UPLOADS_DIR = "audio_files/"
 SOUNDBOARD_FILE = "soundboard.json"
-REPO_PATH = "/home/user/troshilka-discord-bot"
+REPO_PATH = "D:/repota/troshilka-discord-bot"
 
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 
@@ -45,8 +46,20 @@ async def play_next_in_queue(interaction):
                 play_next_in_queue(interaction), bot.loop
             )
         )
+    else:
+        if interaction.guild.voice_client:
+            await interaction.guild.voice_client.disconnect()
+
+async def sound_name_autocomplete(interaction: discord.Interaction, current: str):
+    """Provide autocomplete suggestions for sound names."""
+    return [
+        app_commands.Choice(name=sound, value=sound)
+        for sound in soundboard.keys()
+        if current.lower() in sound.lower()
+    ][:25]
 
 @bot.tree.command(name="play", description="Play a sound from the soundboard")
+@app_commands.autocomplete(sound_name=sound_name_autocomplete)
 async def play_sound(interaction: discord.Interaction, sound_name: str):
     """Adds a sound to the queue and plays it if no other audio is playing."""
     if not interaction.user.voice:
@@ -114,32 +127,34 @@ async def on_message(message):
     if message.content.startswith("!upload") and message.attachments:
         attachment = message.attachments[0]
         if attachment.filename.endswith((".mp3", ".wav", ".ogg")):
-            file_path = f"{UPLOADS_DIR}{attachment.filename}"
-            await attachment.save(file_path)
+            temp_path = f"{UPLOADS_DIR}{attachment.filename}"
+            await attachment.save(temp_path)
 
-            sound_key = os.path.splitext(attachment.filename)[0]
-            soundboard[sound_key] = file_path
+            audio = AudioSegment.from_file(temp_path)
+            duration_seconds = len(audio) / 1000 
+
+            if duration_seconds > 40:
+                os.remove(temp_path)
+                await message.channel.send(f"The audio file '{attachment.filename}' is too long (over 40 seconds). Please upload a shorter file.")
+                return
+
+            base_name = os.path.splitext(attachment.filename)[0].lower()
+            if base_name in soundboard:
+                os.remove(temp_path)  
+                await message.channel.send(f"The sound effect '{base_name}' is already present in the soundboard.")
+                return
+
+            file_path = temp_path
+            soundboard[base_name] = file_path
             save_soundboard()
 
-            await commit_to_repo(file_path, attachment.filename)
-            await message.channel.send(f"File '{attachment.filename}' saved, added to the soundboard, and committed to the repository!")
+            await message.channel.send(f"File '{attachment.filename}' saved and added to the soundboard as '{base_name}'.")
         else:
             await message.channel.send("Please upload a valid audio file (mp3, wav, ogg) with the '!upload' command.")
     elif message.content.startswith("!upload"):
         await message.channel.send("Please attach an audio file to upload.")
 
     await bot.process_commands(message)
-
-async def commit_to_repo(file_path, filename):
-    """Automatically commits the uploaded audio file to the repository."""
-    repo = git.Repo(REPO_PATH)
-    dst_path = os.path.join(REPO_PATH, "audio_files", filename)
-    os.replace(file_path, dst_path) 
-
-    repo.index.add([dst_path])
-    repo.index.commit(f"Added {filename} via bot")
-    origin = repo.remote(name="origin")
-    origin.push()
 
 
 @bot.tree.command(name="process", description="Trim the uploaded audio file")
@@ -164,22 +179,19 @@ async def process_audio(interaction: discord.Interaction, filename: str, start: 
     else:
         await interaction.response.send_message("File not found. Make sure you've uploaded it.")
 
-@bot.tree.command(name="commit", description="Commit and push the processed audio to the repository")
-async def commit_audio(interaction: discord.Interaction, filename: str):
-    """Adds the processed audio to the repo and pushes to Git."""
-    processed_path = f"{UPLOADS_DIR}processed_{filename}"
-    if os.path.exists(processed_path):
-        repo = git.Repo(REPO_PATH)
-        dst_path = os.path.join(REPO_PATH, "audio_files", filename)
-        os.replace(processed_path, dst_path)  
+@bot.tree.command(name="commit", description="Commit and push all new audios to the repository")
+async def commit_audio(interaction: discord.Interaction):
+    """Commits all audio files in the audio_files directory to the repository with a general message."""
+    repo = git.Repo(REPO_PATH)
+    audio_files_dir = os.path.join(REPO_PATH, "audio_files")
+    
+    repo.index.add([os.path.join("audio_files", file) for file in os.listdir(audio_files_dir)])
+    
+    repo.index.commit("Added new audios to the library")
+    origin = repo.remote(name="origin")
+    origin.push()
 
-        repo.index.add([dst_path])
-        repo.index.commit(f"Added {filename} via bot")
-        origin = repo.remote(name="origin")
-        origin.push()
-        await interaction.response.send_message(f"File '{filename}' committed and pushed to the repository.")
-    else:
-        await interaction.response.send_message("Processed file not found. Make sure you've processed it first.")
+    await interaction.response.send_message("All new audios have been committed and pushed to the repository.")
 
 @bot.event
 async def on_ready():

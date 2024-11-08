@@ -3,6 +3,9 @@ from discord.ext import commands
 import asyncio
 import os
 from dotenv import load_dotenv
+import git
+from pydub import AudioSegment
+import json
 
 load_dotenv()
 
@@ -10,9 +13,23 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='/', intents=intents)
 
-soundboard = {
-    "stoyan_kolev": "audio_files/stoyan2.mp3",
-}
+UPLOADS_DIR = "audio_files/"
+SOUNDBOARD_FILE = "soundboard.json"
+REPO_PATH = "/home/user/troshilka-discord-bot"
+
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+
+def load_soundboard():
+    if os.path.exists(SOUNDBOARD_FILE):
+        with open(SOUNDBOARD_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+def save_soundboard():
+    with open(SOUNDBOARD_FILE, "w") as f:
+        json.dump(soundboard, f, indent=4)
+
+soundboard = load_soundboard()
 
 queue = {}
 
@@ -87,6 +104,82 @@ async def show_queue(interaction: discord.Interaction):
         await interaction.response.send_message(f"**Current Queue:**\n{queue_list}")
     else:
         await interaction.response.send_message("The queue is currently empty.")
+
+@bot.event
+async def on_message(message):
+    """Handles file uploads and adds them to the soundboard only if '!upload' is used with an attachment."""
+    if message.author == bot.user:
+        return
+
+    if message.content.startswith("!upload") and message.attachments:
+        attachment = message.attachments[0]
+        if attachment.filename.endswith((".mp3", ".wav", ".ogg")):
+            file_path = f"{UPLOADS_DIR}{attachment.filename}"
+            await attachment.save(file_path)
+
+            sound_key = os.path.splitext(attachment.filename)[0]
+            soundboard[sound_key] = file_path
+            save_soundboard()
+
+            await commit_to_repo(file_path, attachment.filename)
+            await message.channel.send(f"File '{attachment.filename}' saved, added to the soundboard, and committed to the repository!")
+        else:
+            await message.channel.send("Please upload a valid audio file (mp3, wav, ogg) with the '!upload' command.")
+    elif message.content.startswith("!upload"):
+        await message.channel.send("Please attach an audio file to upload.")
+
+    await bot.process_commands(message)
+
+async def commit_to_repo(file_path, filename):
+    """Automatically commits the uploaded audio file to the repository."""
+    repo = git.Repo(REPO_PATH)
+    dst_path = os.path.join(REPO_PATH, "audio_files", filename)
+    os.replace(file_path, dst_path) 
+
+    repo.index.add([dst_path])
+    repo.index.commit(f"Added {filename} via bot")
+    origin = repo.remote(name="origin")
+    origin.push()
+
+
+@bot.tree.command(name="process", description="Trim the uploaded audio file")
+async def process_audio(interaction: discord.Interaction, filename: str, start: int, end: int):
+    """Processes an uploaded audio file by trimming to user-specified start and end times."""
+    filepath = f"{UPLOADS_DIR}{filename}"
+    if os.path.exists(filepath):
+        try:
+            audio = AudioSegment.from_file(filepath)
+            trimmed_audio = audio[start * 1000:end * 1000]
+
+            processed_path = f"{UPLOADS_DIR}processed_{filename}"
+            trimmed_audio.export(processed_path, format="mp3")
+
+            sound_key = os.path.splitext(filename)[0]
+            soundboard[sound_key] = processed_path
+            save_soundboard()
+
+            await interaction.response.send_message(f"Audio trimmed and updated in the soundboard! Use /commit to push it to the repository.")
+        except Exception as e:
+            await interaction.response.send_message(f"Error processing audio: {e}")
+    else:
+        await interaction.response.send_message("File not found. Make sure you've uploaded it.")
+
+@bot.tree.command(name="commit", description="Commit and push the processed audio to the repository")
+async def commit_audio(interaction: discord.Interaction, filename: str):
+    """Adds the processed audio to the repo and pushes to Git."""
+    processed_path = f"{UPLOADS_DIR}processed_{filename}"
+    if os.path.exists(processed_path):
+        repo = git.Repo(REPO_PATH)
+        dst_path = os.path.join(REPO_PATH, "audio_files", filename)
+        os.replace(processed_path, dst_path)  
+
+        repo.index.add([dst_path])
+        repo.index.commit(f"Added {filename} via bot")
+        origin = repo.remote(name="origin")
+        origin.push()
+        await interaction.response.send_message(f"File '{filename}' committed and pushed to the repository.")
+    else:
+        await interaction.response.send_message("Processed file not found. Make sure you've processed it first.")
 
 @bot.event
 async def on_ready():

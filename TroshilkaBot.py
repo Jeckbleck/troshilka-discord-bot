@@ -16,7 +16,7 @@ bot = commands.Bot(command_prefix='/', intents=intents)
 
 UPLOADS_DIR = "audio_files/"
 SOUNDBOARD_FILE = "soundboard.json"
-REPO_PATH = "D:/repota/troshilka-discord-bot"
+REPO_PATH = os.getenv("REPO_PATH")
 
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 

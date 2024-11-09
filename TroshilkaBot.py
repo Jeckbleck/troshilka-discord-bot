@@ -120,42 +120,44 @@ async def show_queue(interaction: discord.Interaction):
 
 @bot.event
 async def on_message(message):
-    """Handles file uploads and adds them to the soundboard only if '!upload' is used with an attachment."""
+    """Handles multiple file uploads and adds them to the soundboard only if '!upload' is used with attachments."""
     if message.author == bot.user:
         return
 
     if message.content.startswith("!upload") and message.attachments:
-        attachment = message.attachments[0]
-        if attachment.filename.endswith((".mp3", ".wav", ".ogg")):
-            temp_path = f"{UPLOADS_DIR}{attachment.filename}"
-            await attachment.save(temp_path)
+        responses = []
+        
+        for attachment in message.attachments:
+            if attachment.filename.endswith((".mp3", ".wav", ".ogg")):
+                temp_path = f"{UPLOADS_DIR}{attachment.filename}"
+                await attachment.save(temp_path)
 
-            audio = AudioSegment.from_file(temp_path)
-            duration_seconds = len(audio) / 1000 
+                audio = AudioSegment.from_file(temp_path)
+                duration_seconds = len(audio) / 1000  
 
-            if duration_seconds > 40:
-                os.remove(temp_path)
-                await message.channel.send(f"The audio file '{attachment.filename}' is too long (over 40 seconds). Please upload a shorter file.")
-                return
+                if duration_seconds > 20:
+                    os.remove(temp_path)
+                    responses.append(f"The audio file `{attachment.filename}` is too long (over 20 seconds). Please upload a shorter file.")
+                    continue
 
-            base_name = os.path.splitext(attachment.filename)[0].lower()
-            if base_name in soundboard:
-                os.remove(temp_path)  
-                await message.channel.send(f"The sound effect '{base_name}' is already present in the soundboard.")
-                return
+                base_name = os.path.splitext(attachment.filename)[0].lower()
+                if base_name in soundboard:
+                    os.remove(temp_path) 
+                    responses.append(f"The sound effect `{base_name}` is already present in the soundboard.")
+                    continue
 
-            file_path = temp_path
-            soundboard[base_name] = file_path
-            save_soundboard()
+                file_path = temp_path
+                soundboard[base_name] = file_path
+                save_soundboard()
+                responses.append(f"File `{attachment.filename}` saved and added to the soundboard as `{base_name}`.")
+            else:
+                responses.append(f"`{attachment.filename}` is not a valid audio file (mp3, wav, ogg).")
 
-            await message.channel.send(f"File '{attachment.filename}' saved and added to the soundboard as '{base_name}'.")
-        else:
-            await message.channel.send("Please upload a valid audio file (mp3, wav, ogg) with the '!upload' command.")
+        await message.channel.send("\n".join(responses))
     elif message.content.startswith("!upload"):
-        await message.channel.send("Please attach an audio file to upload.")
+        await message.channel.send("Please attach one or more audio files to upload.")
 
     await bot.process_commands(message)
-
 
 @bot.tree.command(name="process", description="Trim the uploaded audio file")
 async def process_audio(interaction: discord.Interaction, filename: str, start: int, end: int):
@@ -192,6 +194,32 @@ async def commit_audio(interaction: discord.Interaction):
     origin.push()
 
     await interaction.response.send_message("All new audios have been committed and pushed to the repository.")
+
+@bot.tree.command(name="help", description="List all available commands and their descriptions")
+async def help_command(interaction: discord.Interaction):
+    """Sends a help message listing all commands and their descriptions."""
+    help_text = """
+**Available Commands:**
+
+`/play <sound_name>` - Play a sound from the soundboard. Requires you to be in a voice channel. Autocompletes available sound names.
+
+`/stop` - Stop the current audio and clear the queue.
+
+`/next` - Skip the current audio and play the next one in the queue.
+
+`!upload` - Handles multiple file uploads and adds them to the soundboard only if '!upload' is used with attachments.
+
+`/list_sounds` - List all available sounds in the soundboard.
+
+`/queue` - Display the current audio queue for the guild.
+
+⛔`/process <filename> <start> <end>` - Trim the uploaded audio file between the specified start and end times (in seconds) and add the trimmed version to the soundboard.
+
+⛔`/commit` - Commit and push all new audio files to the repository with a general commit message.
+
+`/help` - Display this help message with a list of available commands.
+    """
+    await interaction.response.send_message(help_text)
 
 @bot.event
 async def on_ready():

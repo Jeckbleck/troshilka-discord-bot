@@ -1,7 +1,10 @@
 {
     "stoyan_kolev": "audio_files/stoyan2.mp3",
-    "RIZZ_Sound_Effect": "audio_files/RIZZ_Sound_Effect.mp3",
-    "Aww_Sound_Effect": "audio_files/Aww_Sound_Effect.mp3",
-    "Confuse_man_sound_effect": "audio_files/Confuse_man_sound_effect.mp3",
-    "crowd_gasp-shock_-_sound_effect_hd": "audio_files/Crowd_Gasp-Shock_-_Sound_Effect_HD.mp3"
+    "rizz": "audio_files/RIZZ_Sound_Effect.mp3",
+    "aww": "audio_files/Aww_Sound_Effect.mp3",
+    "confuse_man": "audio_files/Confuse_man_sound_effect.mp3",
+    "crowd_gasp_shock": "audio_files/Crowd_Gasp-Shock_-_Sound_Effect_HD.mp3",
+    "gunshot": "audio_files/Gunshot_Sound_Effect.mp3",
+    "ping": "audio_files/Ping_sound_effect.mp3",
+    "flash_bang_but_more_violent": "audio_files/Flash_bang_sound_effect_but_more_violent.mp3"
 }
